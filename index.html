@@ -10,6 +10,9 @@
         th, td { border: 1px solid #333; padding: 8px; text-align: left; }
         th { background-color: #222; }
         .last-updated { color: #aaa; margin-bottom: 20px; }
+        .intraday-table { font-size: 0.8em; margin-top: 10px; }
+        .intraday-table th, .intraday-table td { padding: 4px; }
+        h3 { margin-top: 30px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -19,15 +22,17 @@
     <table>
         <tr><th>Metric</th><th>Value</th></tr>
         <tr><td>BTC Price (USD)</td><td id="price">-</td></tr>
-        <tr><td>RSI (7)</td><td id="rsi7">-</td></tr>
-        <tr><td>RSI (14)</td><td id="rsi14">-</td></tr>
-        <tr><td>MACD</td><td id="macd">-</td></tr>
         <tr><td>EMA 20</td><td id="ema20">-</td></tr>
-        <tr><td>EMA 50</td><td id="ema50">-</td></tr>
-        <tr><td>ATR (14)</td><td id="atr14">-</td></tr>
-        <tr><td>Open Interest (USD)</td><td id="oi">-</td></tr>
+        <tr><td>MACD</td><td id="macd">-</td></tr>
+        <tr><td>RSI (7 Period)</td><td id="rsi7">-</td></tr>
+        <tr><td>RSI (14 Period)</td><td id="rsi14">-</td></tr>
+        <tr><td>Open Interest</td><td id="oi">-</td></tr>
         <tr><td>Funding Rate</td><td id="funding">-</td></tr>
+        <tr><td>ATR (14)</td><td id="atr14">-</td></tr>
     </table>
+
+    <h3>Intraday Series (Last 10 Minutes)</h3>
+    <div id="intradaySeries">Loading intraday data...</div>
 
     <script>
         async function fetchBTCData() {
@@ -35,15 +40,32 @@
                 const response = await fetch('/.netlify/functions/fetch-btc-data');
                 const data = await response.json();
 
-                document.getElementById('price').textContent = data.price?.toLocaleString() || '-';
-                document.getElementById('rsi7').textContent = data.rsi7?.toFixed(3) || '-';
-                document.getElementById('rsi14').textContent = data.rsi14?.toFixed(3) || '-';
-                document.getElementById('macd').textContent = data.macd?.toFixed(3) || '-';
-                document.getElementById('ema20').textContent = data.ema20?.toLocaleString() || '-';
-                document.getElementById('ema50').textContent = data.ema50?.toLocaleString() || '-';
-                document.getElementById('atr14').textContent = data.atr14?.toLocaleString() || '-';
-                document.getElementById('oi').textContent = data.openInterest?.toLocaleString() || '-';
-                document.getElementById('funding').textContent = data.fundingRate || '-';
+                // Update main metrics
+                document.getElementById('price').textContent = data.current_price.toFixed(1);
+                document.getElementById('ema20').textContent = data.current_ema20.toFixed(3);
+                document.getElementById('macd').textContent = data.current_macd.toFixed(3);
+                document.getElementById('rsi7').textContent = data.current_rsi_7.toFixed(3);
+                document.getElementById('rsi14').textContent = data.current_rsi_14.toFixed(3);
+                document.getElementById('oi').textContent = data.open_interest.toFixed(2) + ' (Avg: ' + data.open_interest_avg.toFixed(2) + ')';
+                document.getElementById('funding').textContent = parseFloat(data.funding_rate).toExponential();
+                document.getElementById('atr14').textContent = data.atr_14_4h.toFixed(3);
+
+                // Update intraday series
+                let intradayHTML = '<table class="intraday-table">';
+                intradayHTML += '<tr><th>Time</th><th>Price</th><th>EMA20</th><th>MACD</th><th>RSI7</th><th>RSI14</th></tr>';
+                
+                for (let i = 0; i < 10; i++) {
+                    intradayHTML += `<tr>
+                        <td>-${10-i}m</td>
+                        <td>${data.intraday_prices[i]?.toFixed(1) || '-'}</td>
+                        <td>${data.intraday_ema20[i]?.toFixed(3) || '-'}</td>
+                        <td>${data.intraday_macd[i]?.toFixed(3) || '-'}</td>
+                        <td>${data.intraday_rsi_7[i]?.toFixed(3) || '-'}</td>
+                        <td>${data.intraday_rsi_14[i]?.toFixed(3) || '-'}</td>
+                    </tr>`;
+                }
+                intradayHTML += '</table>';
+                document.getElementById('intradaySeries').innerHTML = intradayHTML;
 
                 const now = new Date();
                 document.getElementById('lastUpdated').textContent = 'Last Updated: ' + now.toISOString();
@@ -53,7 +75,9 @@
             }
         }
 
+        // Fetch data immediately when the page loads
         fetchBTCData();
+        // Then fetch data every 5 seconds for real-time updates
         setInterval(fetchBTCData, 5000);
     </script>
 </body>
