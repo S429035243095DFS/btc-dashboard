@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "dependencies": {
     "node-fetch": "^2.6.7",
-    "@pythnetwork/hermes-client": "^1.1.2"
+    "@pythnetwork/price-service-client": "^2.3.1"
   }
 }
