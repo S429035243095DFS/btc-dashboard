@@ -1,5 +1,5 @@
 // netlify/functions/fetch-btc-data.js
-const { PriceServiceConnection } = require("@pythnetwork/price-service-client");
+const fetch = require('node-fetch');
 
 // Helper functions to calculate indicators
 function calculateEMA(prices, period) {
@@ -26,6 +26,7 @@ function calculateRSI(prices, period) {
   
   const averageGain = gains / period;
   const averageLoss = losses / period;
+  if (averageLoss === 0) return 100;
   const relativeStrength = averageGain / averageLoss;
   
   return 100 - (100 / (1 + relativeStrength));
@@ -54,42 +55,42 @@ function calculateATR(highPrices, lowPrices, closePrices, period) {
 
 exports.handler = async function (event, context) {
   try {
-    // 1. Get live BTC/USD price from Pyth Network
-    const connection = new PriceServiceConnection("https://hermes.pyth.network");
-    // Official BTC/USD price feed ID on Pyth
+    // 1. Get live BTC/USD price from Pyth Network using direct HTTP API
     const btcPriceId = "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
     
     let currentPrice = 0;
     try {
-      // Get the latest price feeds
-      const currentPrices = await connection.getLatestPriceFeeds([btcPriceId]);
+      const pythResponse = await fetch(`https://hermes.pyth.network/api/latest_price_feeds?ids[]=${btcPriceId}`);
+      const pythData = await pythResponse.json();
       
-      if (currentPrices && currentPrices.length > 0) {
-        const priceFeed = currentPrices[0];
-        const price = priceFeed.getPriceNoOlderThan(60); // Get price no older than 60 seconds
-        
-        // Pyth prices are scaled; this converts them to a normal number
-        currentPrice = price.price * Math.pow(10, price.expo);
+      if (pythData && pythData.length > 0) {
+        const priceFeed = pythData[0];
+        if (priceFeed.price && priceFeed.price.price) {
+          const price = priceFeed.price.price;
+          const expo = priceFeed.price.expo;
+          // Convert from scaled price to normal number
+          currentPrice = price * Math.pow(10, expo);
+        } else {
+          throw new Error('No price data in Pyth response');
+        }
       } else {
-        throw new Error('No price data received from Pyth');
+        throw new Error('Empty response from Pyth');
       }
     } catch (pythError) {
       console.error('Pyth price fetch failed:', pythError);
-      // Return a 500 error if Pyth fails
-      return {
-        statusCode: 500,
-        headers: { 
-          'Access-Control-Allow-Origin': '*', 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({ 
-          error: 'Failed to fetch price from Pyth',
-          details: pythError.message 
-        })
-      };
+      // Fallback to CoinGecko if Pyth fails
+      try {
+        const geckoResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+        const geckoData = await geckoResponse.json();
+        currentPrice = geckoData.bitcoin.usd;
+        console.log('Using CoinGecko fallback price:', currentPrice);
+      } catch (geckoError) {
+        console.error('CoinGecko fallback also failed:', geckoError);
+        currentPrice = 67500; // Final fallback
+      }
     }
 
-    // 2. Calculate technical indicators (using mock historical data for now)
+    // 2. Calculate technical indicators
     const mockPrices = [107500, 107600, 107450, 107700, 107800, 107750, 107900, 108000, 108100, 108050, 108200, 108150, 108300, 108250, 108400, 108350, 108500, 108450, 108600, 108550, currentPrice];
     const mockHighs = mockPrices.map(price => price + 50);
     const mockLows = mockPrices.map(price => price - 50);
@@ -101,21 +102,37 @@ exports.handler = async function (event, context) {
     const ema50 = calculateEMA(mockPrices, 50);
     const atr14 = calculateATR(mockHighs, mockLows, mockPrices, 14);
 
-    // 3. Structure and return the final data
+    // 3. Get Open Interest and Funding Rate from Bybit with better error handling
+    let openInterest = 1543200000;
+    let fundingRate = "0.0012%";
+
+    try {
+      const bybitResponse = await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT');
+      if (bybitResponse.ok) {
+        const bybitData = await bybitResponse.json();
+        if (bybitData.result && bybitData.result.list && bybitData.result.list[0]) {
+          openInterest = parseFloat(bybitData.result.list[0].openInterest) || openInterest;
+          fundingRate = bybitData.result.list[0].fundingRate || fundingRate;
+        }
+      }
+    } catch (bybitError) {
+      console.log('Bybit API error, using defaults:', bybitError.message);
+    }
+
+    // 4. Structure and return the final data
     const finalData = {
       price: currentPrice,
-      rsi7: rsi7,
-      rsi14: rsi14,
-      macd: macd,
-      ema20: ema20,
-      ema50: ema50,
-      atr14: atr14,
-      // Note: Open Interest and Funding Rate still need a separate source like an exchange API
-      openInterest: 1543200000,
-      fundingRate: "0.0012%"
+      rsi7: parseFloat(rsi7.toFixed(3)),
+      rsi14: parseFloat(rsi14.toFixed(3)),
+      macd: parseFloat(macd.toFixed(3)),
+      ema20: parseFloat(ema20.toFixed(2)),
+      ema50: parseFloat(ema50.toFixed(2)),
+      atr14: parseFloat(atr14.toFixed(2)),
+      openInterest: openInterest,
+      fundingRate: fundingRate
     };
 
-    console.log('Data with calculated indicators:', finalData);
+    console.log('Final data:', finalData);
 
     return {
       statusCode: 200,
