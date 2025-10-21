@@ -54,21 +54,21 @@ function calculateATR(highPrices, lowPrices, closePrices, period) {
 
 exports.handler = async function (event, context) {
   try {
-    // 1. Get live BTC/USD price from Pyth Network
+    // 1. Get live BTC/USD price from Pyth Network using Hermes Client
     const connection = new HermesClient("https://hermes.pyth.network");
     // Official BTC/USD price feed ID on Pyth mainnet
     const btcPriceId = "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
     
     let currentPrice = 0;
     try {
-      const btcPriceFeed = await connection.getPriceFeed(btcPriceId);
-      // Get a price no older than 60 seconds
-      const priceData = btcPriceFeed.getPriceNoOlderThan(60);
+      // Use the correct method for the Hermes client
+      const priceFeed = await connection.getPriceFeed(btcPriceId);
+      // Get the current price
+      const price = priceFeed.getPriceUnchecked();
       // Pyth prices are scaled; this converts them to a normal number
-      currentPrice = priceData.price * Math.pow(10, priceData.expo);
+      currentPrice = price.price * Math.pow(10, price.expo);
     } catch (pythError) {
       console.error('Pyth price fetch failed:', pythError);
-      // In a real scenario, you might want to retry or use a fallback
       return {
         statusCode: 500,
         headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
@@ -77,7 +77,6 @@ exports.handler = async function (event, context) {
     }
 
     // 2. Calculate technical indicators (using mock historical data for the example)
-    // In a production system, you would fetch historical data from an API like Binance
     const mockPrices = [107500, 107600, 107450, 107700, 107800, 107750, 107900, 108000, 108100, 108050, 108200, 108150, 108300, 108250, 108400, 108350, 108500, 108450, 108600, 108550, currentPrice];
     const mockHighs = mockPrices.map(price => price + 50);
     const mockLows = mockPrices.map(price => price - 50);
