@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Institutional Dashboard</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+        th { background-color: #222; }
+        .last-updated { color: #aaa; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🅱 BTC Institutional Dashboard</h1>
+    <div class="last-updated" id="lastUpdated">Loading...</div>
+
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>BTC Price (USD)</td><td id="price">-</td></tr>
+        <tr><td>RSI (7)</td><td id="rsi7">-</td></tr>
+        <tr><td>RSI (14)</td><td id="rsi14">-</td></tr>
+        <tr><td>MACD</td><td id="macd">-</td></tr>
+        <tr><td>EMA 20</td><td id="ema20">-</td></tr>
+        <tr><td>EMA 50</td><td id="ema50">-</td></tr>
+        <tr><td>ATR (14)</td><td id="atr14">-</td></tr>
+        <tr><td>Open Interest (USD)</td><td id="oi">-</td></tr>
+        <tr><td>Funding Rate</td><td id="funding">-</td></tr>
+    </table>
+
+    <script>
+        async function fetchBTCData() {
+            try {
+                const response = await fetch('/.netlify/functions/fetch-btc-data');
+                const data = await response.json();
+
+                document.getElementById('price').textContent = data.price?.toLocaleString() || '-';
+                document.getElementById('rsi7').textContent = data.rsi7?.toFixed(3) || '-';
+                document.getElementById('rsi14').textContent = data.rsi14?.toFixed(3) || '-';
+                document.getElementById('macd').textContent = data.macd?.toFixed(3) || '-';
+                document.getElementById('ema20').textContent = data.ema20?.toLocaleString() || '-';
+                document.getElementById('ema50').textContent = data.ema50?.toLocaleString() || '-';
+                document.getElementById('atr14').textContent = data.atr14?.toLocaleString() || '-';
+                document.getElementById('oi').textContent = data.openInterest?.toLocaleString() || '-';
+                document.getElementById('funding').textContent = data.fundingRate || '-';
+
+                const now = new Date();
+                document.getElementById('lastUpdated').textContent = 'Last Updated: ' + now.toISOString();
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                document.getElementById('lastUpdated').textContent = 'Error updating data.';
+            }
+        }
+
+        fetchBTCData();
+        setInterval(fetchBTCData, 60000);
+    </script>
+</body>
+</html>
